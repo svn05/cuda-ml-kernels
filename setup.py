@@ -22,6 +22,22 @@ cuda_sources = [
     "csrc/kernels/attention.cu",
 ]
 
+# Auto-detect GPU architecture, fallback to common targets
+import subprocess
+import torch
+
+def get_cuda_arch_flags():
+    """Detect GPU arch at build time; fall back to common targets."""
+    if torch.cuda.is_available():
+        cap = torch.cuda.get_device_capability()
+        arch = f"{cap[0]}{cap[1]}"
+        return [f"-gencode=arch=compute_{arch},code=sm_{arch}"]
+    # Fallback: build for common architectures
+    return [
+        "-gencode=arch=compute_75,code=sm_75",   # T4
+        "-gencode=arch=compute_80,code=sm_80",   # A100
+    ]
+
 # Compilation flags
 extra_compile_args = {
     "cxx": ["-O3", "-std=c++17"],
@@ -30,11 +46,7 @@ extra_compile_args = {
         "--use_fast_math",
         "-lineinfo",
         "--expt-relaxed-constexpr",
-        "-gencode=arch=compute_70,code=sm_70",   # V100
-        "-gencode=arch=compute_75,code=sm_75",   # T4 (Colab)
-        "-gencode=arch=compute_80,code=sm_80",   # A100
-        "-gencode=arch=compute_86,code=sm_86",   # RTX 3090
-    ],
+    ] + get_cuda_arch_flags(),
 }
 
 setup(
