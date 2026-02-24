@@ -105,6 +105,43 @@ python benchmarks/benchmark.py --sizes 256 512 1024 2048 4096
 
 Benchmarks use `torch.cuda.Event` for precise GPU timing and report speedup ratios vs PyTorch native ops across multiple matrix sizes.
 
+### Results (NVIDIA Tesla T4, PyTorch 2.10, CUDA 12.8)
+
+**Softmax** — Online algorithm achieves parity with PyTorch's native implementation:
+
+| Size | Custom (ms) | PyTorch (ms) | Ratio |
+|------|-------------|--------------|-------|
+| 256 × 256 | 0.031 | 0.035 | 1.11× |
+| 256 × 512 | 0.033 | 0.040 | 1.21× |
+| 256 × 4096 | 0.070 | 0.073 | 1.06× |
+
+**LayerNorm** — Fused Welford's algorithm competitive across sizes:
+
+| Size | Custom (ms) | PyTorch (ms) | Ratio |
+|------|-------------|--------------|-------|
+| 256 × 256 | 0.025 | 0.033 | 1.36× |
+| 256 × 512 | 0.029 | 0.029 | 1.02× |
+| 256 × 4096 | 0.067 | 0.068 | 1.01× |
+
+**Tiled GEMM** — Shared memory tiling vs cuBLAS (the most optimized BLAS on GPU):
+
+| Size | Custom (ms) | cuBLAS (ms) | Ratio |
+|------|-------------|-------------|-------|
+| 256 × 256 | 0.109 | 0.150 | 1.38× |
+| 512 × 512 | 0.618 | 0.322 | 0.52× |
+| 1024 × 1024 | 3.404 | 0.474 | 0.14× |
+
+> cuBLAS uses register tiling, vectorized loads, and architecture-specific autotuning — the gap at large sizes is expected and demonstrates why vendor-tuned libraries exist.
+
+**Attention** — FlashAttention-inspired tiling reduces memory from O(N²) to O(N):
+
+| Size (B×N×d) | Custom (ms) | Standard (ms) | Memory Savings |
+|--------------|-------------|---------------|----------------|
+| 4 × 256 × 64 | 10.272 | 0.200 | **16×** |
+| 4 × 512 × 64 | 40.689 | 0.204 | **64×** |
+
+> The attention kernel trades wall-clock time for memory efficiency. Standard attention materializes the full N×N matrix; the tiled kernel uses only O(TILE × d) shared memory per block, enabling longer sequences that would otherwise OOM.
+
 ## Project Structure
 
 ```
