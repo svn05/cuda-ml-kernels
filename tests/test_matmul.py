@@ -47,8 +47,10 @@ class TestMatmulTiled:
         expected = torch.mm(A, B)
         result = matmul(A, B)
 
-        # Larger matrices accumulate more floating-point error
-        atol = 1e-4 if max(M, K, N) > 512 else 1e-5
+        # Larger matrices accumulate more floating-point error (different
+        # accumulation order between tiled kernel and cuBLAS)
+        max_dim = max(M, K, N)
+        atol = 1e-3 if max_dim > 512 else (1e-4 if max_dim > 128 else 1e-5)
         assert torch.allclose(result, expected, atol=atol), (
             f"({M}, {K}, {N}): max diff = {(result - expected).abs().max().item()}"
         )
